@@ -1,0 +1,171 @@
+---
+title: "STA410 A3"
+author: "Harold Hyun Woo Lee"
+date: "11/23/2020"
+output: pdf_document
+---
+__Question 1c)__
+```{r}
+#set.seed(1000)
+leverage2 <- function(x, y, w, r=10, m=100) {
+               #QR factorization
+               qrx <- qr(x)
+               qry <- qr(y)
+               #Number of rows
+               n <- nrow(x)
+               #create leverage
+               levx <- NULL
+               levy <- NULL
+               for (i in 1:m) {
+                   v <- ifelse(runif(n)>0.5,1,-1)
+                   v[-w] <- 0
+                   v0 <- qr.fitted(qrx,v)
+                   v1 <- qr.fitted(qry,v)
+                   f <- v0
+                   z <- v1
+                   for (j in 2:r) {
+                      v0[-w] <- 0
+                      v1[-w] <- 0
+                      v0 <- qr.fitted(qrx,v0)
+                      v1 <- qr.fitted(qry,v1)
+                      f <- f + v0/j
+                      z <- z + v1/j
+                      }
+                   levx <- c(levx,sum(v*f))
+                   levy <- c(levy,sum(v*z))
+                   
+                   }
+                std.err.x <- exp(-mean(levx))*sd(levx)/sqrt(m)
+                levx <- 1 - exp(-mean(levx))
+                std.err.y <- exp(-mean(levy))*sd(levy)/sqrt(m)
+                levy <- 1 - exp(-mean(levy))
+                r <- list(levx=levx,std.err.x=std.err.x,
+                          levy=levy,std.err.y=std.err.y)
+                return(r)
+                }
+
+x <- c(1:1000)/1000
+X1 <- 1
+for (k in 1:5) X1 <- cbind(X1,cos(2*k*pi*x),sin(2*k*pi*x))
+library(splines) # loads the library of functions to compute B-splines
+X2 <- cbind(1,bs(x,df=10))
+
+#plot(x,X2[,2])
+#for (i in 3:11) points(x,X2[,i])
+
+
+#create empty vector space
+leverage_x <- c()
+leverage_y <- c()
+std.error_x <- c()
+std.error_y <- c()
+  
+#run leverage function on every 50 rows of X1, X2
+for (i in (1:20)){
+  #Move the indices (w)
+  help_lev <- leverage2(X1, X2, ((i*50-49):(50*i)), r = 10, m=100)
+  #collect the leverages and standard errors of two models
+  leverage_x <- c(leverage_x, help_lev$levx)
+  leverage_y <- c(leverage_y, help_lev$levy)
+  std.error_x <- c(std.error_x, help_lev$std.err.x)
+  std.error_y <- c(std.error_y, help_lev$std.err.y)
+}
+
+soln = rbind(leverage_x, leverage_y, std.error_x, std.error_y)
+soln
+```
+
+We can see that g1 model has larger leverages than g2, model with B-spline functions except for the first 2 and last 2 leverages.
+We can also see that standard error of g1 and g2 are quite close to each other most of the time. 
+
+\pagebreak
+
+
+
+
+
+
+
+__Question 2b)__
+```{r}
+NewtonRaphson <- function(x, theta, sigma, iteration){
+  n <- length(x)
+  #Use median and IQR to derive initial estimates
+  if (missing(theta)){
+    theta = median(x)
+    sigma = IQR(x)/2
+  }
+  alpha = c(theta, sigma)
+  initial = alpha
+  #Compute score function based on initial estimates
+  score1 <- sum((2*(x-theta))/((x-theta)^2+sigma^2))
+  score2 <- n/sigma - sum((2*sigma)/((x-theta)^2+sigma^2))
+  
+  score <- c(score1, score2)
+  
+  
+  #compute Hessian Matrix
+  H11 <- -sum((2*(x-theta)^2-(2*sigma^2))/(((x-theta)^2+sigma^2)^2))
+  H12 <- sum((4*sigma*(x-theta))/(((x-theta)^2+sigma^2)^2))
+  H21 <- sum((4*sigma*(x-theta))/(((x-theta)^2+sigma^2)^2))
+  H22 <- n/(sigma^2) + sum((2*((x-theta)^2 + sigma^2) - 4*(sigma^2))/(((x-theta)^2
+                                                                       +sigma^2)^2))
+  
+  H <- matrix(c(H11, H12, H21, H22), ncol=2, byrow = TRUE)
+  
+  #Newton-Raphson Iteration
+  estimates <- c()
+  for (i in (1:iteration)){
+    alpha <- alpha + solve(H, score)
+    
+    #need to compute new scores
+    score1_new <- sum((2*(x-alpha[1]))/((x-alpha[1])^2+alpha[2]^2))
+    score2_new <- n/alpha[2] - sum((2*alpha[2])/((x-alpha[1])^2+alpha[2]^2))
+    
+    score_new <- c(score1_new, score2_new)
+    
+    #computing new Hessian
+    H11_new <- -sum((2*(x-alpha[1])^2-(2*alpha[2]^2))/(((x-alpha[1])^2+alpha[2]^2)^2))
+    H12_new <- sum((4*alpha[2]*(x-alpha[1]))/(((x-alpha[1])^2+alpha[2]^2)^2))
+    H21_new <- sum((4*alpha[2]*(x-alpha[1]))/(((x-alpha[1])^2+alpha[2]^2)^2))
+    H22_new <- n/(alpha[2]^2) + sum((2*((x-alpha[1])^2 + alpha[2]^2) - 
+                                       4*(alpha[2]^2))/(((x-alpha[1])^2+alpha[2]^2)^2))
+    
+    H_new <- matrix(c(H11_new, H12_new, H21_new, H22_new), ncol=2, byrow = TRUE)
+    
+    #overwrite new variables
+    H <- H_new
+    score <- score_new
+    
+    #putting our estimates in matrix form
+    estimates <- rbind(estimates, alpha)
+    
+  }
+  #assign column and row names to estimates
+  colnames(estimates) <- c("theta", "sigma")
+  rownames(estimates) <- c(1:iteration)
+  
+  #Solving for variance-covariance matrix
+  #Just the inverse of Hessian Matrix
+  var_cov = solve(H)
+  
+  
+  result = list(initial = initial, estimates = estimates, var_cov = var_cov)
+  return(result)
+}
+
+set.seed(2)
+x <- rcauchy(1000)
+NewtonRaphson(x, iteration=10)
+```
+My example is rcauchy data of 1000 points and the algorithm used Newton-Raphson with 10 iterations. 
+Notice that starting from the 3rd run, we have convergence. The function also outputs the variance covariance matrix (given by var_cov) of the MLE which is the inverse of the Hessian matrix.
+
+
+
+
+
+
+
+
+
