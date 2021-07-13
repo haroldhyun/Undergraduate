@@ -1,0 +1,333 @@
+---
+title: "STA410 A1"
+output: pdf_document
+---
+
+Name: Harold Hyun Woo Lee
+\newline
+
+R coding part of the assignment \newline
+##Question1)
+```{r}
+#fwht2d
+fwht2d <- function(x) {
+             h <- 1
+             len <- ncol(x)
+             while (h < len) {
+                for (i in seq(1,len,by=h*2)) {
+                   for (j in seq(i,i+h-1)) {
+                     a <- x[,j]
+                     b <- x[,j+h]
+                     x[,j] <- a + b
+                     x[,j+h] <- a - b
+                     }
+                }
+             h <- 2*h
+             }
+             h <- 1
+             len <- nrow(x)
+             while (h < len) {
+                for (i in seq(1,len,by=h*2)) {
+                   for (j in seq(i,i+h-1)) {
+                     a <- x[j,]
+                     b <- x[j+h,]
+                     x[j,] <- a + b
+                     x[j+h,] <- a - b
+                     }
+                }
+             h <- 2*h
+             }
+             x
+             }
+
+```
+#1b&c)
+```{r}
+#1b Hard and soft thresholding)
+hard <- function(x, lambda){
+  #hard is a function that takes in a single element and a lambda
+  if (abs(x) >= lambda){
+    
+    return(x)
+  }
+  else{
+    return(0)
+  }
+}
+
+soft <- function(x, lambda){
+  #soft is a function that takes in a single element and a lambda
+  if ((abs(x) - lambda)>=0){
+    return(sign(x)*(abs(x) - lambda))
+  }
+  else{
+    return(0)
+  }
+}
+
+#Image is the original image.
+design <- matrix(scan("design.txt"),ncol=256,byrow=T)
+colours <- grey(seq(0,1,length=256))
+image(design, axes=F, col=colours)
+
+par(mfrow=c(2,2))
+
+#I will make 4 denoised images using hard threshold
+xhat <- fwht2d(design) # x is a 2^k x 2^k matrix
+xhat_2 <- fwht2d(design)
+xhat_3 <- fwht2d(design)
+xhat_4 <- fwht2d(design)
+
+#First denoised image using Hard
+#Every element in the first column will be thresholded against lambda of 0
+for (x in (1:256)){
+  xhat[x] <- hard(xhat[x], 0)
+}
+#Then elements in other columns will be thresholded against lambda of 150
+for (x in (257:length(design))){
+  xhat[x] <- hard(xhat[x], 150)
+}
+
+
+#Second denoised image using Hard
+#Every element in the first two column will be thresholded against lambda of 0
+for (x in (1:512)){
+  xhat_2[x] <- hard(xhat_2[x], 0)
+}
+#Then elements in other columns will be thresholded against lambda of 150
+for (x in (573:length(design))){
+  xhat_2[x] <- hard(xhat_2[x], 150)
+}
+
+
+#Third denoised image using Hard
+#Every element in the first column will be thresholded against lambda of 0
+for (x in (1:256)){
+  xhat_3[x] <- hard(xhat_3[x], 0)
+}
+#Then elements in other columns will be thresholded against lambda of 300
+for (x in (257:length(design))){
+  xhat_3[x] <- hard(xhat_3[x], 300)
+}
+
+
+#Fourth denoised image using Hard
+#Every element in the first column will be thresholded against lambda of 0
+for (x in (1:256)){
+  xhat_4[x] <- hard(xhat_4[x], 0)
+}
+#Then elements in other columns will be thresholded against lambda of 75
+for (x in (257:length(design))){
+  xhat_4[x] <- hard(xhat_4[x], 75)
+}
+
+
+xhat_inverse <- fwht2d(xhat)/ncol(xhat)^2 # inverse transform
+xhat_2_inverse <- fwht2d(xhat_2)/ncol(xhat_2)^2
+xhat_3_inverse <- fwht2d(xhat_3)/ncol(xhat_3)^2
+xhat_4_inverse <- fwht2d(xhat_4)/ncol(xhat_4)^2
+
+#These are the images when Hard threshold is used.
+image(xhat_inverse, axes=F, col=colours)
+image(xhat_2_inverse, axes=F, col=colours)
+image(xhat_3_inverse, axes=F, col=colours)
+image(xhat_4_inverse, axes=F, col=colours)
+```
+Note that the above 4 graphs used hard thresholding method. 
+\newline
+Top left: first column lambda is 0, other columns lambda is 150 \newline
+Top right: first 2 column lambda is 0, other columns lambda is 150 \newline
+Bottom left: first column lambda is 0, other columns lambda is 300 \newline
+Bottom right: first column lambda is 0, other columns lambda is 75 \newline
+\newline
+We can see that using hard threshold with lambda of around 150 is enough to denoise the image just right.
+Anything more or less than lambda value of 150, we get to see more blurriness in the denoised image.
+
+```{r}
+par(mfrow=c(2,2))
+
+#I will make 4 denoised images using soft threshold now
+soft_1 <- fwht2d(design) # x is a 2^k x 2^k matrix
+soft_2 <- fwht2d(design)
+soft_3 <- fwht2d(design)
+soft_4 <- fwht2d(design)
+
+#First denoised image using soft
+#Every element in the first column will be thresholded against lambda of 0
+for (x in (1:256)){
+  soft_1[x] <- soft(soft_1[x], 0)
+}
+#Then elements in other columns will be thresholded against lambda of 150
+for (x in (257:length(design))){
+  soft_1[x] <- soft(soft_1[x], 150)
+}
+
+
+#Second denoised image using soft
+#Every element in the first two column will be thresholded against lambda of 0
+for (x in (1:512)){
+  soft_2[x] <- soft(soft_2[x], 0)
+}
+#Then elements in other columns will be thresholded against lambda of 150
+for (x in (573:length(design))){
+  soft_2[x] <- soft(soft_2[x], 150)
+}
+
+
+#Third denoised image using soft
+#Every element in the first column will be thresholded against lambda of 0
+for (x in (1:256)){
+  soft_3[x] <- soft(soft_3[x], 0)
+}
+#Then elements in other columns will be thresholded against lambda of 300
+for (x in (257:length(design))){
+  soft_3[x] <- soft(soft_3[x], 300)
+}
+
+
+#Fourth denoised image using soft
+#Every element in the first column will be thresholded against lambda of 0
+for (x in (1:256)){
+  soft_4[x] <- soft(soft_4[x], 0)
+}
+#Then elements in other columns will be thresholded against lambda of 75
+for (x in (257:length(design))){
+  soft_4[x] <- soft(soft_4[x], 75)
+}
+
+
+soft_1_inverse <- fwht2d(soft_1)/ncol(soft_1)^2 # inverse transform
+soft_2_inverse <- fwht2d(soft_2)/ncol(soft_2)^2
+soft_3_inverse <- fwht2d(soft_3)/ncol(soft_3)^2
+soft_4_inverse <- fwht2d(soft_4)/ncol(soft_4)^2
+
+#These are the images when Hard threshold is used.
+image(soft_1_inverse, axes=F, col=colours)
+image(soft_2_inverse, axes=F, col=colours)
+image(soft_3_inverse, axes=F, col=colours)
+image(soft_4_inverse, axes=F, col=colours)
+```
+Note that the above 4 graphs used soft thresholding method. 
+\newline
+Top left: first column lambda is 0, other columns lambda is 150 \newline
+Top right: first 2 column lambda is 0, other columns lambda is 150 \newline
+Bottom left: first column lambda is 0, other columns lambda is 300 \newline
+Bottom right: first column lambda is 0, other columns lambda is 75 \newline
+\newline
+We can see that using soft threshold with lambda of around 75 is enough to denoise the image just right.
+Anything more or less than lambda value of 75, we get to see more blurriness in the denoised image.\newline
+
+I will now try the same thing but instead of hard threshold, using soft threshold. \newline
+
+##Question 2d)
+```{r}
+#Define our variables
+theta = 0.9
+e = 10^(-5)
+
+#Let us first find the M value
+#compute the value of t such that Phi(t) = 1/theta
+upper_t = ((1/theta)*(2^10))^(1/10) - 1
+lower_t = 1
+#Hence (lower_t, upper_t) is the interval for Phi(t) such that 1<Phi(t)<1/theta
+#So let's take a discrete set of points T such that T = {1< t_1, t_2, - - - , t_k}
+#Let t_k = 1.02
+t<- seq(1, 1.02, len=1000)
+
+#Define phi function
+Phi <- function(t){
+  ((1+t)^10)/(2^10)
+}
+
+#Let's compute for M
+find_M <- function(t){
+  M <- min((log(1 - theta) - log(1-theta*Phi(t)) - log(e))/log(t))
+}
+#I'll use floor function here to keep M as an integer
+M <- floor(find_M(t))
+print(M)
+
+x_value <- seq(1, 1.02, len=1000)
+y_value <- (log(1 - theta) - log(1-theta*Phi(x_value)) - log(e))/log(x_value)
+x_new <- x_value[950:1000]
+y_new <- y_value[950:1000]
+plot(x_new,y_new, xlab = "Theta(t)", ylab = "M", main = "Plot of M value for a given Theta(t)")
+
+#using the plot we can tell that M=724 is the minimum value.
+```
+
+```{r}
+#2d
+#Define distribution of{X_i}
+p <- function(x){
+  choose(10, x)*(1/2)^10
+}
+#Define DFT of {p(x) :x=0, ... , M-1}
+phat <- function(j){
+  x = seq(0, (M-1), 1)
+  i = complex(real=0, imaginary=1)
+  sum(exp(-2*pi*i*(j/M)*x)*p(x))
+}
+
+#Define g function
+g <- function(x){
+  (1-theta)/(1-theta*x)
+}
+#Define inverse FFT
+PS <- function(s){
+  result = 0
+  i = complex(real=0, imaginary=1)
+  for (j in (0:723)){
+    var = exp(2*pi*i*(s/M)*j)*g(phat(j))
+    result = result+var
+  }
+  return((1/M)*result)
+}
+```
+#2d part 1)
+```{r}
+# Evaluate the DFT
+x = c(seq(0, M-1, 1))
+DFT = c()
+for (var in x){
+  DFT_var = phat(var)
+  DFT = c(DFT, DFT_var)
+}
+
+#DFT now stores phat(j) values where j = 0, --- , M-1
+
+#DFT
+```
+#2d Part 2
+```{r}
+# Evaluate g(phat(j))
+#we already computed and stored phat(j) values in variable called DFT.
+#Loop through this and calculate g(phat(j)) for j = 0, --- , M-1
+
+gphat <- c()
+for (var in DFT){
+  gphat = c(gphat, g(var))
+}
+#gphat now stores all g(phat(j)) for j = 0, --- , M-1
+#gphat
+```
+
+#2d Part 3
+```{r}
+S = seq(0, 723, 1)
+ps <- c()
+for (var in S){
+  ps = c(ps, PS(var))
+}
+#ps
+#ps is the P(S=s) for s = {0,...,M-1}
+#Here using sum(ps) we can see that it totals up to 1, which is what we want.
+sum(ps)
+
+plot(c(0:(M-1)),ps,type="h",lwd=3, xlim=c(0,200), xlab = "S=s", ylab = "P(S=s)", 
+     main="Probability graph for P(S=s)")
+```
+For the sake of graph, I only graphed up to s value of 200 as we can tell that P(S=s) approach 0. 
+Nonetheless, sum of P(S=s) is 1 and this is exactly what we want.
+
+Written part of the assignment is below.
