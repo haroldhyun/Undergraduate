@@ -1,2 +1,2 @@
 # Undergraduate
-Undergraduate course work 
+Contains various senior level Undergraduate course work and assignments.
