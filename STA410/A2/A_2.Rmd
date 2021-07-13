@@ -1,0 +1,57 @@
+---
+title: "STA410 A2"
+author: "Harold Hyun Woo Lee"
+date: "10/21/2020"
+output: pdf_document
+---
+
+```{r setup}
+HP <- function(x,lambda,p=20,niter=200) {
+        n <- length(x)
+        a <- c(1,-2,1)
+        aa <- c(a,rep(0,n-2))
+        aaa <- c(rep(aa,n-3),a)
+        mat <- matrix(aaa,ncol=n,byrow=T)
+        mat <- rbind(diag(rep(1,n)),sqrt(lambda)*mat)
+        xhat <- x
+        x <- c(x,rep(0,n-2))
+        sumofsquares <- NULL
+        for (i in 1:niter) {
+           w <- sort(sample(c(1:n),size=p))
+           xx <- mat[,w]
+           y <- x - mat[,-w]%*%xhat[-w]
+           r <- lsfit(xx,y,intercept=F)
+           xhat[w] <- r$coef
+           sumofsquares <- c(sumofsquares,sum(r$residuals^2))
+           }
+        r <- list(xhat=xhat,ss=sumofsquares)
+        r
+        }
+
+data <- scan("yield.txt")
+
+#Calculating objective function for different values of p
+
+#First create an empty vector and name it R
+R <- vector(mode="list", length=46)
+
+names(R) <- c((5:50))
+#The for loop will store values of the objective function at its index corresponding to p value.
+for (i in (5:50)){
+  R[[i]] <- HP(data, lambda = 1000, p = i, niter = 1000)$ss
+  
+}
+
+#Plot the first values of the objective function
+#Then add on the other values from p = {6,...,50}
+plot(R[[5]], cex = 0.4, col = "red", xlab= "Iteration", ylab="Objective function value", main="Plot of iteration against objective function value for P values")
+for (i in 6:50){
+  points(R[[i]], col = colors()[160+i], cex=0.2)
+}
+
+
+
+```
+In the graph, p = 5 is graphed using the color Red. As you increase the p value, you can see the change in color. \newline
+As P value increases to 50, the color becomes from black to grey. This suggests that the objective function always decreases with each iteration as p goes from 5 to 50. \newline
+Thus, suggests that the objective function is never increasing.   
