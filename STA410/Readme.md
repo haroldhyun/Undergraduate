@@ -5,3 +5,5 @@ algorithms, such as the Fast Fourier Transform (and related methods) and methods
 linear algebra and optimization (for example, computing least squares estimates and maximum likelihood estimates). Along the way, you will learn some basic theory of numerical
 analysis (computational complexity, convergence rates of algorithms) and you will encounter
 some statistical methodology that you may not have seen in other courses.
+
+Assignments include written portion and statistical analysis using R.
