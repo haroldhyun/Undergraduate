@@ -1,4 +1,4 @@
-STA410 Statistical Computation 
+#STA410 Statistical Computation 
 
 Syllabus: The goal of this course is to give an overview of some of the computational methods that are useful in statistics. The first part of the course will focus on basic
 algorithms, such as the Fast Fourier Transform (and related methods) and methods for generating random variables. The second part of the course will focus on numerical methods for
