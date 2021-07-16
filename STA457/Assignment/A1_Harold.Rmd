@@ -1,0 +1,509 @@
+---
+title: "STA457 Assignment (Fall 2020)"
+author: "Harold Hyun Woo Lee & 1003410908"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    highlight: tango
+    theme: yeti
+  word_document: default
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(lubridate)
+library(xts)
+library(timeSeries)
+library(forecast)
+library(ggplot2)
+library(knitr)
+library(readxl)
+library(MASS)
+library(forecast)
+library(timeDate)
+library(sarima)
+library(DT)
+library(gridExtra)
+library(dynlm)
+library(kableExtra)
+
+PreWhiten.arma<- function(x , ar = NULL, ma = 0){
+        if(is.null(ar) && is.null(ma)) print("both ar and ma coefficients are empty!")
+        pwData = numeric(0)
+        m = as(modelCoef(new("ArmaModel", ar = ar, ma = ma)), "list")
+        eps = numeric(length(x))
+        pwData = xarmaFilter(m, x =x, eps = eps, whiten = TRUE) 
+        pwData[!is.na(pwData)]
+}
+PreWhiten.ar<- function(x , ar = NULL){
+        if(is.null(ar)) print(" autoregressive coefficients are empty!")
+        pwData = numeric(0)
+        pwData = filter(x, c(1, -ar),method=c("convo"),sides=1) 
+        pwData[!is.na(pwData)]
+}
+
+LBTest<- function(res, nPQ = 0, m = 24, ifPlot = FALSE){
+        stopifnot(nPQ >= 0, m >= 1, m > nPQ)
+        n <- length(res)
+        lags <- 1:m
+        df <- (nPQ+1):m 
+        ra <- (acf(res, lag.max = m, plot = FALSE)$acf)[-1]
+        QQ <- n * (n + 2) * cumsum((ra^2)/(n - (1:m)))[df]
+        
+        pv <- 1 - pchisq(QQ, df)
+        QQ <- round(QQ, 2)
+        a <- matrix(c(df, QQ, pv), ncol = 3)
+        dimnames(a) <- list(rep("", length(QQ)), c("m", "Qm", "pvalue"))
+        if(ifPlot){
+                plot(x = a[,1],y = a[,3],
+                     ylim = c(0,1), pch = 15, col = "lightblue",
+                     ylab = "p-value", xlab = "m",
+                     main = "Ljung-Box portmanteau test")
+                abline(h =0.05, col =2)
+                abline(h =0.01, col =4)
+                grid()
+        }else {
+                a
+        }
+}
+```
+
+
+\ \ \ \ \   
+
+1. Download delinquency rates and real GDP data from Quercus and put them into your working directory.
+
+2. Calculate the changes of real GDP using the following R codes. 
+
+
+```{r}
+###1.
+dat <- read.csv("GDPC1.csv")
+CL <- read.csv("DRCLACBS.csv")
+
+
+gdp_tim<-timeSequence(from = "1947-01-01", to = "2020-07-01", by = "quarter")
+gdp<- timeSeries(dat$GDPC1, charvec = gdp_tim)
+
+CL_tim <-timeSequence(from = "1987-01-01", to = "2020-04-01", by = "quarter")
+CL<- timeSeries(CL$DRCLACBS, charvec = CL_tim)
+
+par(mfrow=c(2,1))
+plot(gdp, pch = 18, main = "Real GDP", xlab="Time", ylab="");grid()
+plot(CL, pch = 18, main = "Delinquency Rates on Commercial Loans", xlab="Time", ylab=""); 
+grid()
+
+
+
+###2.
+RGDP = ts(diff(dat[,2])/100,frequency = 4, end = c(2020,3))
+```
+### Use the data from 1987 Q1 to 2018 Q2
+```{r, echo=FALSE}
+#' @split training and forecasting sample
+
+# We need to use the data between 1987 Q1 and 2018 Q3.
+RGDP_tim <-timeSequence(from = "1947-04-01", to = "2020-07-01", by = "quarter")
+
+# Overwrite the variable RGDP
+# We can use window to help us take subset of RGDP
+# Split into training and forecasting
+RGDP <- timeSeries(RGDP, charvec = RGDP_tim)
+RGDP_train <- window(RGDP, start = "1987-01-01", end = "2018-07-01")
+RGDP_test <- window(RGDP, start="2018-10-01", end="2020-04-01")
+
+
+# For delinquency rate, do the same
+
+
+CL_train <- window(CL, start = "1987-01-01", end = "2018-07-01")
+CL_test <- window(CL, start="2018-10-01", end="2020-04-01")
+
+#' @plot (using ts.plot or autoplot)
+ts.plot(cbind(RGDP_train, CL_train), col=c(2, 3), main="Changes of real GDP and delinquency rates", xlab="Time")
+legend("bottomright", 
+  legend = c("rgdp", "cl"), 
+  col = c(2, 3),
+  pch = c(20,20),
+  bty = "n",
+  pt.cex = 2, 
+  cex = 1.0, 
+  text.col = "black", 
+  horiz = F , 
+  inset = c(0.1, 0.1))
+```
+
+
+
+##### Model this relationship using the transfer function noise model.(For simplicity, assume that both delinquency rates and changes of real GDP are stationary.)
+
+Your analyses should include:         
+
+1. Conduct `prewhitening` analysis to identify the lead-lag relationship between changes of real GDP and delinquency rates;          
+
+   * ARMA model for changes of real GDP and its residual ACF and PACF plots
+   * Use cross correlation plot of prewhitened processes to identify transfer function ($\nu_i$)
+   
+```{r}
+#Fit an ARMA model first to determine p, q then conduct prewhitening
+# Select an ARMA(p,q) model using AIC
+RGDP.arma <- auto.arima(RGDP_train, max.p = 52, max.q = 52, stationary = TRUE)
+nAR = RGDP.arma$arma[1]; nMA = RGDP.arma$arma[2]
+
+# Algorithm fits an ARMA(2,0,0)
+
+# Check that Inverse roots are within the unit circle
+plot(RGDP.arma)
+
+# check model adequacy using the function provided by the Professor for the 
+# Ljung-Box test (LBTest)
+par(mfrow = c(1,1), cex = 0.8)
+LBTest(RGDP.arma$residuals, nPQ = nAR+nMA, m = 25, ifPlot = TRUE)
+# all are above the 5% significance level, so this appears adequate
+
+# Check the model residual is approximately white noise.
+autoplot(acf(RGDP.arma$residuals, plot=FALSE), main="ACF of the residuals of fitted model")
+autoplot(pacf(RGDP.arma$residuals, plot=FALSE), main = "PACF of the residuals of fitted model")
+# Residuals are approximately 0 and show no correlation -> white noise.
+
+
+#' @prewhiten x, y
+mod = RGDP.arma
+if(nMA!=0){
+  xf = PreWhiten.arma(RGDP_train, ar = mod$coef[1:nAR], 
+                      ma = mod$coef[(1:nMA)+nAR])[-(1:nAR)]
+  yf = PreWhiten.arma(CL_train, ar = mod$coef[1:nAR], 
+                      ma=mod$coef[(1:nMA)+nAR])[-(1:nAR)]  
+}else{
+  xf = PreWhiten.arma(RGDP_train, ar = mod$coef[1:nAR], 
+                      ma = 0)[-(1:nAR)]
+  yf = PreWhiten.arma(CL_train, ar = mod$coef[1:nAR], 
+                      ma=0)[-(1:nAR)] 
+}
+
+
+#' @ccf plot prewhiten x and y
+
+par(cex=0.75)
+ccf(c(xf), c(yf), lwd=4, ylab="Cross-correlation functions",
+    main="CCF of prewhitened RGDP and Delinquency rate")
+abline(v=0, col="gold", lwd=1, lty="dashed")
+text(1, 0.2, "0", col=2)
+text(-2, 0.2, "-1", col=3)
+text(-3, 0.2, "-2", col=2)
+text(-4, 0.2, "-3", col=2)
+text(-5, 0.2, "-4", col=2)
+text(-6, 0.2, "-5", col=2)
+# 0, -1, -2, -3, -4, -5 are identified using cross-correlation function
+```
+To conduct prewhitening analysis to identify the lead-lag relationship between changes of real GDP and delinquency rates, we must first fit an ARMA model on RGDP_train. Here we see that we have ARMA(2,0,2) model and inverse roots are within unit circle, passes Ljung-Box test (all above 0.05 CI level) and ACF/PACF graphs indicate approximately white noise. So they all look good. 
+Checking the graph of CCF, we can see that we have 0, -1, -2, -3, -4, -5 as significant values. 
+
+\pagebreak
+
+2. Fit a multiple regression using the findings in the `prewhitening` step, i.e.
+$$y_t = \sum_i v_i x_{t-i} +\xi_t,~~~(1)$$
+where $y_t$ and $x_t$ denote the output and input process, respectively, and $\xi_t$ is the noise process.(Hint: Use `prewhitening` to select the lagged $\{x_i\}$ in the regression)
+
+```{r}
+#' @fit Equation (1)
+
+# I am storing lag values as matrix to fit a lm model
+lag_matrix <- matrix(c(RGDP, lag(RGDP),lag(RGDP, 2), lag(RGDP, 3), lag(RGDP, 4), 
+             lag(RGDP, 5)), ncol=6)
+lag_matrix <- timeSeries(lag_matrix, charvec = RGDP_tim)
+colnames(lag_matrix) <- c("lag0","lag1","lag2","lag3","lag4","lag5")
+
+RGDP_lags <- window(lag_matrix, start="1987-01-01", end="2018-07-01")
+
+# Fitting equation (1)
+mod.reg <- lm(CL_train~(RGDP_lags[,1] + RGDP_lags[,2]+ RGDP_lags[,3] + 
+                          RGDP_lags[,4] + RGDP_lags[,5] + RGDP_lags[,6]))
+
+
+#' @plot residual ACF and PACF of the above regression
+
+autoplot(acf(mod.reg$residuals, plot = FALSE), main="ACF of Residuals of Regression")
+autoplot(pacf(mod.reg$residuals, plot=FALSE), main="PACF of Residuals of Regression")
+
+# check model adequacy using the function provided by the Professor for the 
+# Ljung-Box test (LBTest)
+par(mfrow = c(1,1), cex = 0.8)
+LBTest(mod.reg$residuals, nPQ = 0, m = 25, ifPlot = TRUE)
+```
+Here we can see the result of the ACF and PACF graph of the residuals of regression model. Notice that ACF graph looks like a stair approaching 0 as lag value increases (especially around 20). The model does not pass Ljung-Box test as P-value is all approximately 0. 
+
+
+\pagebreak
+
+4. Fit a transfer function noise model using the rational distributed lag function, i.e. 
+$$y_t = \frac{\delta(B)}{\omega(B)}x_t+n_t,~~~(2)$$
+where $\delta(B)$ and $\omega(B)$ are polynomials in the backward shift operator $B$, and $n_t$ follows an ARMA process. Write down the mathematical representation of the fitted model.
+
+```{r}
+#' @fit Equation (2) and show the fitted model
+# Data is our data with first column as delinquency rate
+# rest of the columns are lag values
+
+data <- cbind(CL_train, RGDP_lags)
+
+# My TFN model is Arima(4,0,2)
+# There can be many solutions but this is one of many
+mod.tfn <- auto.arima(data[,1], xreg=data[,-1], max.p = 4, start.p = 4, start.q = 2, 
+                      max.P = 0, max.Q=0, stationary = TRUE)
+mod.tfn$coef
+```
+
+* __Write down the mathematical equation of your fitted model__
+
+Mathematically we can express it as:
+
+$$y_t = -0.02y_{t-1}+1.24y_{t-2}+0.31y_{t-3}-0.62y_{t-4}+3.41-0.06x_t-0.05x_{t-1}-0.06x_{t-2}-0.04x_{t-3}-0.04x_{t-4}-0.04x_{t-5} +  \\ a_t + 1.43a_{t-1} + 0.57a_{t-2}$$
+
+Written in compact notation we have:
+
+
+$$(1+0.02B-1.24B^2-0.31B^3+0.62B^4)y_t = 3.41-(0.06+0.05B+0.06B^2+0.04B^3+0.04B^4+0.04B^5)x_t+ \\ (1+1.43B+0.57B^2)a_t$$
+
+
+Simplified we get:
+
+$$ y_t = \frac{3.41}{(1+0.02B-1.24B^2-0.31B^3+0.62B^4)} - \frac{(0.06+0.05B+0.06B^2+0.04B^3+0.04B^4+0.04B^5)}{(1+0.02B-1.24B^2-0.31B^3+0.62B^4)}x_t + \\ \frac{(1+1.43B+0.57B^2)}{(1+0.02B-1.24B^2-0.31B^3+0.62B^4)}a_t$$
+
+Rearranging we get:
+$$y_t = 36.67 - \frac{(0.06+0.05B+0.06B^2+0.04B^3+0.04B^4+0.04B^5)}{(1+0.02B-1.24B^2-0.31B^3+0.62B^4)}x_t + \frac{(1+1.43B+0.57B^2)}{(1+0.02B-1.24B^2-0.31B^3+0.62B^4)}a_t$$
+
+\pagebreak
+
+5. Conduct the model adequacy tests (diagnostics) on the above models and conclude your inference.   
+
+```{r, echo=FALSE, fig.height=3}
+#' @check model adequacy of residual serial correlation
+
+# Plot the acf and pacf of the residuals to check model adequacy
+
+autoplot(acf(mod.tfn$residuals, plot = FALSE), main="ACF of the Residuals of TFN")
+autoplot(pacf(mod.tfn$residuals, plot=FALSE), main = "PACF of the Residuals of TFN")
+
+
+
+#' @check model adequacy of residual crosss correlation 
+
+m = 40
+lags = 1:m
+df <- (4+6):m
+n = length(mod.tfn$residuals)
+rccf = ccf(mod$residuals,mod.tfn$residuals, plot = FALSE, lag.max = m)$acf[-(1:m)]
+Qm = n* (n + 2) * cumsum((rccf^2)/(n - (0:m)))[df]
+pv <- 1 - pchisq(Qm, df)
+a = cbind(df, Qm,pv)
+
+par(mfrow = c(1,2))
+LBTest(mod.tfn$residuals, nPQ = 4+6, m=m, ifPlot = TRUE)
+plot(x = a[,1],y = a[,3],
+     ylim = c(0,0.2), pch = 15, col =4, cex=0.6,
+     ylab = "p-value", xlab = "m",
+     main = "Cross-correlation check")
+abline(h =0.01, col =2)
+abline(h =0.05, col=2)
+grid()
+
+```
+\newline
+Here we can see that residuals are approximately normal and uncorrelated from the ACF/PACF graphs.
+For the Ljung-Box portmanteau test, we can see an upward trend as lag value increases. Nonetheless, we see that p-value is all greater than 0.05 and passes the test.
+For Cross correlation check, notice that for small m value, we do not surpass the 0.01% confidence interval. However, as m gets bigger, say 35 and onward, we can clearly see an upward trend and surpassing 0.01% mark. This is what we want to see.
+
+
+
+\ \ \ \ 
+
+##### Conduct the out of sample forecasts of the above fitted models using the remaining observations. Calculate the forecast performance using Mean squared error (MSE), Mean absolute error (MAE), and Mean absolute percentage error (MAPE):
+$$MSE = \sqrt \frac{\sum_{i=1}^L (y_{t+i}-\hat y_t(i))^2}{L}$$
+$$MAE = \frac{\sum_{i=1}^L \left|y_{t+i}-\hat y_t(i)\right|}{L}$$
+$$MAPE = \frac{1}{L}\sum_{i=1}^L \left|1-\frac{\hat y_t(i)}{y_{t+i}}\right|,$$
+where $\hat y_t(i)$ denotes the forecast at origin $t$ with lead time $i$
+
+```{r}
+#' @forecast using tfn
+# Call our delinquency forecast data as yobs
+yobs <- CL_test
+yhat_tfn <- forecast(mod.tfn, h = 6 , xreg = data[,-1], level=0.95)
+# We only want the first 7 predictions
+yhat_tfn <- round(c(as.numeric(yhat_tfn$mean)[1:7]), 2)
+
+
+
+#' @calculate MSE, MAE, MAPE 
+MSE_tfn <- sqrt(mean((yobs - yhat_tfn)^2))
+
+MAE_tfn <- mean(abs(yobs - yhat_tfn))
+
+MAPE_tfn <- mean(abs(1-yhat_tfn/yobs))
+
+MSE_tfn
+MAE_tfn
+MAPE_tfn
+```
+
+
+\ \ \ \  
+
+\pagebreak
+
+##### 4. Conduct the same out of sample forecasts soley on $y_t$ using an ARIMA model. Compare and discuss its peformance metrics with the TFN model. 
+
+* __Hint:__ You may fit an ARIMA model on $y_t$ using `auto.arima` but ensure that the fitted model pass the Ljung-Box test.
+
+
+```{r}
+# First fit an ARIMA model on y_t
+#mod.arima <- auto.arima(CL_train, max.p = 52, max.q = 52, stationary = TRUE)
+
+# ARIMA(2,0,6) model
+
+mod.arima <- auto.arima(CL_train, max.p = 2, start.p = 2, start.q = 6, 
+                      max.P = 0, max.Q=0, stationary = TRUE)
+
+acf(mod.arima$residuals)
+pacf(mod.arima$residuals)
+
+LBTest(mod.arima$residuals, nPQ = 8, ifPlot = TRUE)
+
+#' @forecat using auto.arima
+
+yhat_arima <- forecast(mod.arima)
+# We only want the first 7 values 
+yhat_arima <- round(c(as.numeric(yhat_arima$mean)[1:7]), 2)
+
+#' @calculate MSE, MAE, MAPE 
+
+MSE_arima <- sqrt(mean((yobs - yhat_arima)^2))
+MAE_arima <- mean(abs(yobs - yhat_arima))
+MAPE_arima <- mean(abs(1-yhat_arima/yobs))
+
+MSE_arima
+MAE_arima
+MAPE_arima
+
+```
+You can see that the fitted ARIMA(2,0,6) model passes Ljung-Box test. 
+
+
+##### Conduct the same out of sample forecast analysis using forecast combination of the fitted TFN model and ARIMA model (equal weight and MSE weighting). Compare its forecast metrics with those in the previous two questions
+
+* _Forecast combination:_      
+The combined forecaster $\hat f_t(i)$ may be given by
+$$\hat f_t(i) = w_a ~ \hat y_t^{(a)}(i)+w_b~ \hat y_t^{(b)}(i),$$
+where the superscripts $(a)$ and $(b)$ stand for transfer function noise model and ARIMA model, respectively. For the equal weight scheme, $w_a = w_b = 0.5$, and for the MSE weighting scheme, its weights is the solution of
+$$\min_{w_a} \sqrt {\sum_{t=1}^n \{y_t -w_a \hat y_t^{(a)}-(1-w_a)\hat y_t^{(b)}\}^2},$$
+where $w_a, w_b \in[0,1]$, $w_a+w_b=1$, and $\hat y_t^{(a)}$ denote the fitted value at time $t$ in the training sample and $n$ is the series length.
+
+```{r}
+#' @calculate MSE, MAE, MAPE for the equal weight forecast
+
+comb_forecast <- 0.5*yhat_tfn + 0.5*yhat_arima
+
+# Forecast Analysis
+MSE_equal <- sqrt(mean((yobs - comb_forecast)^2))
+MAE_equal <- mean(abs(yobs - comb_forecast))
+MAPE_equal <- mean(abs(1-comb_forecast/yobs))
+
+MSE_equal
+MAE_equal
+MAPE_equal
+```
+
+```{r}
+#' @calculate MSE scheme weight
+
+f <- function(w){
+  sum((CL_train - w*(mod.tfn$fitted) - (1-w)*(mod.arima$fitted))^2)
+}
+# w is our weight for MSE scheme
+w <- as.numeric(optimize(f, lower=0, upper=1))[1]
+
+
+#' @calculate MSE, MAE, MAPE for the above combination forecast
+
+scheme_weight <- w*yhat_tfn + (1-w)*yhat_arima
+
+# Forecast Analysis
+MSE_scheme <- sqrt(mean((yobs - scheme_weight)^2))
+MAE_scheme <- mean(abs(yobs - scheme_weight))
+MAPE_scheme <- mean(abs(1-scheme_weight/yobs))
+
+MSE_scheme
+MAE_scheme
+MAPE_scheme
+```
+
+\pagebreak
+
+Forecast Analysis values for each models shown below: \newline
+
+| Forecast Analysis | TFN | Auto.Arima | Equal Weight | MSE Scheme Weight |
+|----------------|-------------------------------------|----------------------------------|------------------------------|---------------------------|-------------------------------------|
+| MSE | 0.335 |  0.2647 | 0.2960 | 0.3250
+| MAE | 0.2757 | 0.1714 | 0.2207 | 0.2624
+| MAPE | 0.1254 | 0.080 | 0.1015 | 0.1196
+
+
+
+
+Using the table above, I calculated all the appropriate forecast variance analysis for our models.
+First, take a look at TFN and auto.ARIMA model. Forecast analysis for TFN model is larger than ARIMA(2,0,6) model. This indicates that ARIMA model actually minimizes variance of the forecast more than the TFN model. Equal weight model seems to have larger forecast analysis than ARIMA values but still less than TFN model.
+Now if you look at combined forecast, i.e) MSE_Scheme_weight, the optimized weight is 0.87 for TFN model and 0.13 for ARIMA model. Note that equal weight scheme actually has smaller MSE, MAE, MAPE values than optimized weight scheme.
+
+\newline
+As a bonus, here is the forecast graph using various models we have. You can see that ARIMA model is a lot closer to true values than TFN model.
+```{r, echo=FALSE}
+TFN_plot <- cbind(CL_test[,0], yhat_tfn)
+arima_plot <- cbind(CL_test[,0], yhat_arima)
+
+ts.plot(cbind(CL, TFN_plot, arima_plot), col = c(2, 5, 1), main="Forecast of delinquency rate")
+legend("topleft", 
+  legend = c("True values", "TFN", "Arima"), 
+  col = c(2, 5, 1),
+  pch = c(20,20),
+  bty = "n",
+  pt.cex = 2, 
+  cex = 1.0, 
+  text.col = "black", 
+  horiz = F , 
+  inset = c(0.1, 0.1))
+```
+
+
+
+* __Reference:__ William W.S. Wei (2006), _Time Series Analysis--Univariate and Multivariate Methods_, Second Edition. (Chapter 14)
+```{r}
+rgdp.new <-  window(RGDP, start = "2017-07-01", end = "2020-07-01")
+
+lag5 = function(xreg){
+  len = length(xreg)
+  cbind(xreg[-c(1,2,3,4,5)],                           # lag =0
+        xreg[-c(1,2,3,4, len)],                        # lag = 1
+        xreg[-c(1,2,3, len-1,len)],                    # lag = 2
+        xreg[-c(1,2, len-2,len-1,len)],                # lag = 3
+        xreg[-c(1,len-3, len-2,len-1,len)],            # lag = 4
+        xreg[-c(len-4, len-3, len-2,len-1,len)])       # lag = 5
+}
+inputs = ts(lag5(rgdp.new),freq = 4, end = c(2020,3))
+f1 = predict(mod.tfn, newxreg = inputs, n.ahead = 8)
+pred.tfn = c(f1$pred)
+pred.tfn
+
+pred.ar <- predict(mod.arima, n.ahead = 8)$pred
+
+cl.new = window(CL, start = "2018-10-01", end = "2020-07-01")
+
+
+yobs <- c(cl.new)
+yhat_arima
+
+mean((c(pred.ar[1:7])-yobs)^2,na.rm = TRUE)%>%sqrt()
+```
+
