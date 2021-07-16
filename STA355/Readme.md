@@ -1,1 +1,3 @@
+# STA355: Theory of Statistical Practice
 
+Syllabus: Course provides a unifying structure for the methods taught in other courses, and will enable students to read methodological research articles or articles with a large methodological component. Topics covered include statistical models and distributions; fundamentals of inference: estimation, hypothesis testing, and significance levels; likelihood functions and likelihood-based inference; prior distributions and Bayesian inference. Delta method, order statistics, jackknife estimation, density estimation, Bayesian estimation, substitution principle, pivots, methods for "big data", Neyman Pearson Lemma, "p-hacking". 
