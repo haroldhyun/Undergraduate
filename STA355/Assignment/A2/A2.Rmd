@@ -1,0 +1,117 @@
+---
+title: "STA355 A2"
+author: "Harold Hyun Woo Lee"
+date: "2/21/2021"
+output: pdf_document
+---
+__Q1a)__
+```{r}
+dat <- scan("buffsnow.txt")
+
+plot(density(dat, bw=5), main="Density with bandwidth 5 and 2 modes", xlab="Snowfall")
+plot(density(dat, bw=4), main="Density with bandwidth 4 and 3 modes", xlab="Snowfall")
+
+```
+\newpage
+ __Q1c)__ 
+```{r}
+kde.cv <- function(x,h) {
+             n <- length(x)
+             if (missing(h)) {
+                r <- density(x)
+                h <- r$bw/4 + 3.75*c(0:100)*r$bw/100
+                }
+             cv <- NULL
+             for (j in h) {
+                cvj <- 0
+                for (i in 1:n) {
+                   z <- dnorm(x[i]-x,0,sd=j)/(n-1)
+                   cvj <- cvj + log(sum(z[-i]))
+                   }
+                cv <- c(cv,cvj/n)
+                }
+              r <- list(bw=h,cv=cv)
+              r
+              }
+
+# Split the data into two 
+dat1 <- dat[1:68]
+dat2 <- dat[69:136]
+
+# Compute bandwidth for dat1
+r1 <- kde.cv(dat1)
+#plot(r1$bw,r1$cv) # plot of bandwidth versus CV
+r1$bw[r1$cv==max(r1$cv)] # bandwidth maximizing CV
+
+# Compute bandwidth for dat2
+r2 <- kde.cv(dat2)
+#plot(r2$bw,r2$cv) # plot of bandwidth versus CV
+r2$bw[r2$cv==max(r2$cv)] # bandwidth maximizing CV
+
+
+plot(density(dat1, bw=7.54), main="Density for first 68 seasons", xlab="Snowfall")
+plot(density(dat2, bw=17.15), main="Density for last 68 seasons", xlab="Snowfall")
+```
+The estimated density for the first 68 seasons is approximately 0.02, and the estimated density for the last 68 seasons is approximately 0.012.
+We see that the bandwidths are 7.54 and 17.15 respectively. The later half of the data is somewhat more dispersed and has a larger bandwidth value.
+In addition, we see that the density for the first 68 seasons is much higher than the density for the later half. \newpage
+
+
+
+__Q2b)__
+```{r}
+x1 <- seq(0.01, 1, by=0.01)
+plot(x1, gamma(1/x1 + 1)^x1, main="Limit of MPS(F) as alpha approaches 0", 
+     xlab = "alpha", ylab="MPS(F)")
+
+x2 <- seq(5000, 70000, by = 1000)
+plot(x2, gamma(1/x2 + 1)^x2, main="Limit of MPS(F) as alpha approaches inf", 
+     xlab = "alpha", ylab="MPS(F)")
+abline(h = 0.5614661, col="red")
+tail(gamma(1/x2 + 1)^x2, 1)
+```
+The 2 graphs above shows that as $\alpha \rightarrow 0$, $MPS(F) \rightarrow \inf$. \
+In addition, as $\alpha \rightarrow \inf$, $MPS(F) \rightarrow 0.5614$. \newpage
+
+__Q2c)__
+```{r}
+income <- scan("incomes.txt")
+
+
+x_bar <- mean(income)
+count = c()
+for (val in income){
+  if (val < x_bar){
+    count = c(count, 1)
+  }
+  if (val > x_bar){
+    count = c(count, 0)
+  }
+}
+MPS_hat = sum(count)/200
+
+
+loo <- NULL
+for (i in 1:200){
+  loo <- c(loo, mean(count[-i]))
+}
+sehat <- sqrt(199*sum((loo-mean(loo))^2)/200)
+sehat
+
+
+
+MPS_hat
+```
+Here we see that $\hat{MPS(F)} = 0.835$ and the estimate of the standard error using jackknife is 0.026 \newpage
+
+___2d)___
+```{r}
+
+sigma_2 = var(log(income))
+
+var_MPS = sigma_2/(16*pi) * exp(-sigma_2/4)
+
+SE = sqrt(var_MPS)/sqrt(200)
+SE
+```
+The estimate of the standard error of $\psi(\hat{\sigma})$ for the income data is about 0.0120. This is smaller than the estimate found in part C.

@@ -1,0 +1,18 @@
+kde.cv <- function(x,h) {
+             n <- length(x)
+             if (missing(h)) {
+                r <- density(x)
+                h <- r$bw/4 + 3.75*c(0:100)*r$bw/100
+                }
+             cv <- NULL
+             for (j in h) {
+                cvj <- 0
+                for (i in 1:n) {
+                   z <- dnorm(x[i]-x,0,sd=j)/(n-1)
+                   cvj <- cvj + log(sum(z[-i]))
+                   }
+                cv <- c(cv,cvj/n)
+                }
+              r <- list(bw=h,cv=cv)
+              r
+              }
