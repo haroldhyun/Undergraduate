@@ -5,3 +5,6 @@ Covers the topic:
 - Maximum Likelihood Estimate
 
 Files:
+- A3_code.Rmd -> R markdown file for computing statistics
+- A3_submit -> Submission
+- bees, LMS-var, quakes -> Required files/data
