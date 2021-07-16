@@ -1,0 +1,157 @@
+---
+title: "STA355 A3"
+author: "Harold Hyun Woo Lee"
+date: "3/9/2021"
+output: pdf_document
+---
+### Q1c) 
+```{r}
+dat <- scan("bees.txt")
+
+# Convert the data from degrees to radians
+dat <- dat*pi/180
+n <- length(dat)
+
+r <- ((sum(cos(dat)))^2+(sum(sin(dat)))^2)^(1/2)
+k_hat <- ((r/n)*(2-(r^2/n^2)))/(1-(r^2/n^2))
+
+# Helper function to get valid range of K
+k_range <- function(x, N, delta = c(0.05, 0.2)){
+  
+  # Calculate h
+  h <- diff(delta)/N
+  
+  # Get the sequence
+  thetas <- seq(from = delta[1], to = delta[2], by = h)
+  
+  return(list("h" = h, "theta" = thetas))
+}
+
+k_range2 <- function(x, N, del){
+  
+  # Calculate h
+  h <- del*2/N
+  
+  # Get the sequence
+  thetas <- seq(from = k_hat - del, to = k_hat + del, by = h)
+  
+  return(list("h" = h, "theta" = thetas))
+}
+
+
+
+
+
+
+U <- function(k, lambda, r, n){
+  
+  before <- (exp(-lambda*k)*besselI(r*k, 0))/(besselI(k,0))^n
+  prenorm <- before/max(before)
+  
+  prenorm
+
+}
+
+denom <- function(x, lambda, k, N, h){
+    n <- length(x)
+    r <- ((sum(cos(x)))^2+(sum(sin(x)))^2)^(1/2)
+    
+    post <- U(k, lambda, r, n)
+    
+    mult <- c(1/2,rep(1,N-1),1/2) # multipliers for trapezoidal rule  
+    norm <- sum(mult*post)/(1/h) # integral evaluated using trapezoidal rule  
+    post <- post/norm # normalized posterior
+    post.cdf <- cumsum(mult*post)/(1/h) # compute the posterior cdf
+    lower <- max(k[post.cdf<0.025])
+    upper <- min(k[post.cdf<0.975])
+      
+    return(list("post" = post, "post.cdf" = post.cdf, 
+                "lower" = lower, "upper" = upper))
+  
+}
+
+
+k_r <- k_range2(dat, N=1000, 0.13)$theta
+h <- k_range2(dat, N=1000, 0.13)$h
+
+test <- denom(dat, lambda = 1, k_r, N = 1000, h)
+
+plot(k_r, test$post, main="Lambda = 1", cex=0.2)
+
+test2 <- denom(dat, lambda = 0.1, k_r, N = 1000, h)
+
+plot(k_r, test2$post, main="Lambda = 0.1", cex=0.2)
+```
+The posterior densities for two lambda values are shown above in the plots. The difference between the two lambdas is that for lambda = 1, the tail on the left side is slightly bigger than lambda = 0.1 Otherwise, they are very much similar to each other.
+As for the possibility that k = 0, I believe we can't rule it out. If you look at the posterior density graph, at k = 0 we see the posterior density is almost 5. If the probability was 0 then posterior density wouldn't be so high. 
+
+
+
+### Q2c)
+```{r}
+library(MASS)
+
+set.seed(1)
+var_norm <- function(n){
+
+  # M is 500
+  nrep <- 500
+
+  # Declaring x values
+  x <- c(1:n)/n
+
+  beta <- NULL
+
+  for (i in 1:nrep) {
+    y <- rnorm(n)
+    r <- lmsreg(y~x)
+    beta <- c(beta,r$coef[2])
+    }
+  var <- var(beta)
+  return(var)
+}
+
+B1_norm_var <- c(var_norm(50), var_norm(100), var_norm(500), var_norm(1000), var_norm(5000))
+
+log_B1_norm_var <- log(B1_norm_var)
+
+x <- c(log(50), log(100), log(500), log(1000), log(5000))
+
+fit <- lm(log_B1_norm_var~x)
+alpha = fit$coefficients[2]
+-alpha
+```
+
+### Q2d)
+```{r}
+set.seed(1)
+var_cauchy <- function(n){
+
+  # M is 500
+  nrep <- 500
+
+  # Declaring x values
+  x <- c(1:n)/n
+
+  beta <- NULL
+
+  for (i in 1:nrep) {
+    y <- rcauchy(n)
+    r <- lmsreg(y~x)
+    beta <- c(beta,r$coef[2])
+    }
+  var <- var(beta)
+  return(var)
+}
+
+B1_cau_var <- c(var_cauchy(50), var_cauchy(100), var_cauchy(500), var_cauchy(1000), var_cauchy(5000))
+
+log_B1_cau_var <- log(B1_cau_var)
+
+x <- c(log(50), log(100), log(500), log(1000), log(5000))
+
+fit2 <- lm(log_B1_cau_var~x)
+alpha2 = fit2$coefficients[2]
+-alpha2
+```
+

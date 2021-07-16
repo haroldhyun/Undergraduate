@@ -1,0 +1,11 @@
+library(MASS)
+n <- 50
+nrep <- 500
+x <- c(1:n)/n
+beta <- NULL
+for (i in 1:nrep) {
+   y <- rcauchy(n)
+   r <- lmsreg(y~x)
+   beta <- c(beta,r$coef[2])
+   }
+var50 <- var(beta)
