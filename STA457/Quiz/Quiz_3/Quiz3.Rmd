@@ -1,0 +1,289 @@
+---
+title: "STA457 Quiz 3"
+author: "Harold Hyun Woo Lee"
+date: "11/15/2020"
+output: pdf_document
+---
+
+```{r}
+library(knitr)
+library(readxl)
+library(MASS)
+library(forecast)
+library(timeSeries)
+library(timeDate)
+library(sarima)
+```
+
+```{r}
+### FUNCTIONS FROM THE PROF
+# utility functions -- prewhitening  
+PreWhiten.ar<- function(x , ar = NULL){
+  if(is.null(ar)) print(" autoregressive coefficients are empty!")
+  pwData = numeric(0)
+  pwData = filter(x, c(1, -ar),method=c("convo"),sides=1) 
+  pwData[!is.na(pwData)]
+}
+
+PreWhiten.arma<- function(x , ar = NULL, ma = 0){
+  if(is.null(ar) && is.null(ma)) print("both ar and ma coefficients are empty!")
+  pwData = numeric(0)
+  m = as(modelCoef(new("ArmaModel", ar = ar, ma = ma)), "list")
+  eps = numeric(length(x))
+  pwData = xarmaFilter(m, x =x, eps = eps, whiten = TRUE) 
+  pwData[!is.na(pwData)]
+}
+
+LBTest<- function(res, nPQ = 0, m = 24, ifPlot = FALSE){
+  stopifnot(nPQ >= 0, m >= 1, m > nPQ)
+  n <- length(res)
+  lags <- 1:m
+  df <- (nPQ+1):m 
+  ra <- (acf(res, lag.max = m, plot = FALSE)$acf)[-1]
+  QQ <- n * (n + 2) * cumsum((ra^2)/(n - (1:m)))[df]
+  
+  pv <- 1 - pchisq(QQ, df)
+  QQ <- round(QQ, 2)
+  a <- matrix(c(df, QQ, pv), ncol = 3)
+  dimnames(a) <- list(rep("", length(QQ)), c("m", "Qm", "pvalue"))
+  if(ifPlot){
+    plot(x = a[,1],y = a[,3],
+         ylim = c(0,1), pch = 15, col =4,
+         ylab = "p-value", xlab = "m",
+         main = "Ljung-Box portmanteau test")
+    abline(h =0.05, col =2)
+    abline(h =0.01, col ="green", lty = "dashed")
+    grid()
+  }else {
+    a
+  }
+}
+
+```
+
+
+
+
+```{r}
+#Reading Data
+GFluTrends <- read_excel("case_study_1_fluwatch.xlsx",sheet="Google Flu Trends", skip = 1)
+head(names(GFluTrends))
+
+fluWatch <- read_excel("case_study_1_fluwatch.xlsx", sheet="FluWatch-BC", skip = 2)
+head(names(fluWatch))
+
+
+# we want projected flu cases data for BC and flu test data  
+tim<-timeSequence(from = "2003-09-28", to = "2015-08-09", by = "week")
+GFT<- timeSeries(GFluTrends[,"British Columbia"], charvec = tim)
+
+tim1 <-timeSequence(from = "2003-09-07", to = "2015-08-23", by = "week")
+fluTest<- timeSeries(fluWatch[,"FluTest"], charvec = tim1)
+
+# split into training and test data
+GFT.obs = window(GFT, start = "2003-09-28", end = "2014-08-10")
+GFT.test = window(GFT, start = "2014-08-17", end = "2015-08-09")
+fluTest.obs = window(fluTest, start = "2003-09-28", end = "2014-08-10")
+fluTest.test = window(fluTest, start = "2014-08-17", end = "2015-08-09")
+
+# plot training data
+par(mfrow = c(2,1), cex = 0.8)
+plot(GFT.obs,type = "b", pch = 18, main = "Google Flu Trends (training)");grid()
+plot(fluTest.obs, type = "b", pch = 18, main = "Flu Tests (training)"); grid()
+
+# plot test data
+plot(GFT.test,type = "b", pch = 18, main = "Google Flu Trends (test)");grid()
+plot(fluTest.test, type = "b", pch = 18, main = "Flu Tests (test)"); grid()
+```
+
+```{r}
+# select an ARMA(p,q) model using AIC
+mod.arma <- auto.arima(GFT.obs, max.p = 52, max.q = 52, stationary = TRUE) 
+p = mod.arma$arma[1]; q = mod.arma$arma[2]
+# algorithm fits an ARMA(4,3)
+
+# check that Inverse roots are within the unit circle
+plot(mod.arma)
+# all good
+```
+
+
+
+```{r}
+# check model adequacy using the function provided by the prof for the 
+# Ljung-Box test, LBTest
+par(mfrow = c(1,1), cex = 0.8)
+LBTest(mod.arma$residuals, nPQ = p+q, m = 52, ifPlot = TRUE)
+# all are above the 5% significance level, so this appears adequate
+```
+
+
+```{r}
+### TRANSFER NOISE FUNCTION MODEL
+mod = mod.arma
+nAR = mod$arma[1]
+nMA = mod$arma[2]
+if(nMA!=0){
+  xf = PreWhiten.arma(GFT.obs, ar = mod$coef[1:nAR], 
+                      ma = mod$coef[(1:nMA)+nAR])[-(1:nAR)]
+  yf = PreWhiten.arma(fluTest.obs, ar = mod$coef[1:nAR], 
+                      ma=mod$coef[(1:nMA)+nAR])[-(1:nAR)]  
+}else{
+  xf = PreWhiten.arma(GFT.obs, ar = mod$coef[1:nAR], 
+                      ma = 0)[-(1:nAR)]
+  yf = PreWhiten.arma(fluTest.obs, ar = mod$coef[1:nAR], 
+                      ma=0)[-(1:nAR)] 
+}
+
+
+# cross-correlation function
+# identifying lags of the x-variable that might be useful predictors of y
+par(cex=0.75)
+ccf(c(xf), c(yf), lwd=4, ylab="Cross-correlation functions",
+    main="CCF of prewhitened GFT and flu test")
+abline(v=0, col="gold", lwd=1, lty="dashed")
+text(1, 0.2, "0", col=2)
+text(-2, 0.2, "-1", col=2)
+# -1 and 0 are identified
+
+
+# find the transfer function noise model
+y <- fluTest
+x <- GFT
+# we change dat object
+########################[-c(1:5),]
+dat<- cbind(y,x, lag(x))[-c(1:5),]
+colnames(dat)<-c("fluTest", "GFT", "GFT1")
+data<- timeSeries(dat, charvec = tim)
+
+
+
+
+
+data.obs = window(data, start = "2003-10-12", end = "2014-08-10")
+data.test = window(data, start = "2014-08-17", end = "2015-07-26")
+
+# fit ARIMA model
+mod.tfn = auto.arima(data.obs[,1], xreg = data.obs[,-1], stationary = TRUE)
+mod.tfn
+
+# model adequacy check: cross-correlation and LB test
+m = 26
+lags = 1:m
+df <- (1+2+1):m
+n = length(mod.tfn$res)
+rccf = ccf(mod$residuals,mod.tfn$residuals, plot = FALSE, lag.max = m)$acf[-(1:m)]
+Qm = n* (n + 2) * cumsum((rccf^2)/(n - (0:m)))[df]
+pv <- 1 - pchisq(Qm, df)
+a = cbind(df, Qm,pv)
+
+
+
+#################nPQ 6??
+LBTest(mod.tfn$res, nPQ = 6, ifPlot = TRUE)
+plot(x = a[,1],y = a[,3],
+     ylim = c(0,1), pch = 15, col =4,
+     ylab = "p-value", xlab = "m",
+     main = "Cross-correlation check")
+abline(h =0.05, col =2)
+grid()
+# all p values are above the 5% significance level
+
+
+
+
+
+
+
+
+
+par(mfrow = c(1,1), cex = 0.75)
+ts.plot(mod.tfn$fitted, ylab = "", main ="TFN model")
+lines(c(fluTest.obs), pch = 10, col = "green", type ="p")
+grid()
+```
+
+
+
+```{r}
+####Step 1
+OLS <- lm(fluTest.obs~GFT.obs)
+
+e_t <- OLS$residuals
+
+
+
+
+####Step 2
+#Identify an ARMA model for {e_t}
+tim3 = timeSequence(from = "2003-09-28", to = "2014-08-10", by="week")
+e_t.obs = timeSeries(e_t, charvec = tim3)
+mod1 = auto.arima(e_t)
+mod2 = auto.arima(e_t.obs, max.p = 52, max.q = 52, stationary = TRUE)
+
+
+####Step 3
+#Apply Box and Tiao Transformation
+nAR = mod2$arma[1]
+nMA = mod2$arma[2]
+
+if(nMA!=0){
+  xf = PreWhiten.arma(GFT.obs, ar = mod2$coef[1:nAR], 
+                      ma = mod2$coef[(1:nMA)+nAR])[-(1:nAR)]
+  yf = PreWhiten.arma(fluTest.obs, ar = mod2$coef[1:nAR], 
+                      ma=mod2$coef[(1:nMA)+nAR])[-(1:nAR)]  
+}else{
+  xf = PreWhiten.arma(GFT.obs, ar = mod2$coef[1:nAR], 
+                      ma = 0)[-(1:nAR)]
+  yf = PreWhiten.arma(fluTest.obs, ar = mod2$coef[1:nAR], 
+                      ma=0)[-(1:nAR)] 
+}
+
+
+OLS_2 <- glm(yf~xf)
+e_t_2 <- OLS_2$residuals
+
+plot(e_t_2)
+
+acf(e_t_2, lag.max=20)
+plot(OLS_2)
+
+
+
+
+dat <- read.csv("Quiz3Data.csv")
+X <- dat$x
+Y <- dat$y
+
+mod <- glm(Y~X)
+n_t <- mod$residuals
+mod1 <- auto.arima(n_t, max.p = 52, max.q = 52, stationary = TRUE)
+nAR = mod1$arma[1]
+nMA = mod1$arma[2]
+
+acf(n_t)
+
+if(nMA!=0){
+  xf = PreWhiten.arma(X, ar = mod1$coef[1:nAR], 
+                      ma = mod1$coef[(1:nMA)+nAR])[-(1:nAR)]
+  yf = PreWhiten.arma(Y, ar = mod1$coef[1:nAR], 
+                      ma=mod1$coef[(1:nMA)+nAR])[-(1:nAR)]  
+}else{
+  xf = PreWhiten.arma(X, ar = mod1$coef[1:nAR], 
+                      ma = 0)[-(1:nAR)]
+  yf = PreWhiten.arma(Y, ar = mod1$coef[1:nAR], 
+                      ma=0)[-(1:nAR)] 
+}
+mod2 <- glm(yf~xf)
+n_t_2 <- mod2$residuals
+
+summary(mod2)
+acf(n_t_2)
+pacf(n_t_2)
+```
+
+
+
+
+
+
