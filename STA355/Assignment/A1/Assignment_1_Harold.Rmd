@@ -1,0 +1,86 @@
+---
+title: "STA355 A1"
+author: "Harold Hyun Woo Lee"
+date: "1/27/2021"
+output: pdf_document
+---
+___Question 1b)___
+```{r}
+library(fdrtool)
+tau <- seq(from=0, to=1, by=0.01)
+tau <- tau[2:100]
+r <- (tau*(1-tau))/(((qhalfnorm(tau))^2)*((dhalfnorm(qhalfnorm(tau)))^2))
+
+plot(tau, r, xlab="Tau", ylab="Gamma Squared",pch=ifelse(tau==0.86, 19, 1),  
+     col=ifelse(tau==0.86, "red", "black"), main="Tau against gamma squared")
+
+
+plot(tau[77:92], r[77:92], pch=ifelse(tau[77:92]==0.86, 19, 1), 
+     col=ifelse(tau[77:92]==0.86, "red", "black"), xlab="Tau", ylab="Gamma Squared", 
+     main="Tau against Gamma Squared zoomed in")
+# Find the minimum value of r squared
+min(r)
+
+```
+Here we can see that the $\tau=0.86$ minimizes the gamma squared function at 0.77
+
+___Question 1d)___
+
+```{r}
+
+dat <- scan("prob1-data.txt")
+
+
+halfnormal <- function(x,tau=0.5,ylim) {
+       sigma <- quantile(abs(x),probs=tau)/sqrt(qchisq(tau,1))
+       n <- length(x)
+       pp <- ppoints(n)
+       qq <- sqrt(qchisq(pp,df=1))
+# upper envelope
+       upper <- sigma*(qq + 3*sqrt(pp*(1-pp))/(2*sqrt(n)*dnorm(qq)))
+# lower envelope 
+       lower <- sigma*(qq - 3*sqrt(pp*(1-pp))/(2*sqrt(n)*dnorm(qq)))
+# add upper and lower envelopes to plot
+       if (missing(ylim)) ylim <- c(0,max(c(upper,abs(x))))
+       plot(qq,sort(abs(x)),
+          xlab="Half Normal quantiles",ylab="ordered data",pch=20,
+          ylim=ylim, col=ifelse(sort(abs(x)) > 1.2*sigma*qq, "blue", "chartreuse"))
+       lines(qq,lower,lty=3,lwd=3,col="red")
+       lines(qq,upper,lty=3,lwd=3,col="red")
+       abline(a=0,b=sigma,lwd=3)
+       }
+
+
+
+
+halfnormal(dat, tau=0.5)
+```
+For the above graph, I edited the half normal function so that points that are above the sigma slope line by 20% are colored in blue.
+The rest of the points that are more or less close to the straight line whose slope is sigma are colored in neon green.
+I've given it a weight of 1.2 to color the points by blue to give a sort of leeway to those points that are close to the slope but slightly above the slope.
+We can see that there are about 12 points whose means are non-zero.
+
+___Question 2c)___
+```{r}
+
+x <- scan("kevlar.txt")
+x <- sort(x)
+n <- length(x)
+d <- c(n:1*c(x[1], diff(x)))
+plot(c(1:n)/n, cumsum(d)/sum(x), xlab="t", ylab="TTT")
+abline(0,1)
+```
+As shown above in TTT plot for the Kevlar 373/epoxy strands data, we can see that the hazard function is roughly increasing. 
+We can note that the points are mostly above the 45 degree line and roughly sketch out the concave shape from $t = 0$ to $t=0.8$. 
+
+
+
+
+
+
+
+
+
+
+
+
