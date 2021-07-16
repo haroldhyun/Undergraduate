@@ -1,0 +1,300 @@
+---
+title: "How likely is your bike to be stolen in Toronto based on its properties?"
+author: "Hyun Woo Lee (Harold), Min Gyu Woo"
+date: "02/03/2021"
+output: pdf_document
+---
+
+```{r, echo=FALSE, warning=FALSE, results='hide'}
+library(stringr)
+library(dplyr, warn.conflicts = FALSE)
+library(ggplot2)
+library(ggthemes)
+suppressMessages(library(wordcloud))
+library(scales)
+
+options(dplyr.summarise.inform = FALSE)
+```
+
+```{r dataClean, echo=FALSE, results='hide', warning=FALSE}
+# Read data
+d <- as.data.frame(read.csv("bicycle-thefts-2014-2019_test.csv"))
+
+# Take attributes of interest
+d %>% select(Occurrence_Year, Occurrence_Month, Occurrence_Day,
+             Bike_Make, Bike_Model, Bike_Colour, Cost_of_Bike, 
+             Status, ObjectId, Status)
+```
+### Introduction 
+
+
+Toronto is one of the major economic cities in Canada. With such a dense population in Toronto, the city is battling major traffic congestion by introducing city bicycles stations and encouraging residents to frequent bicycle trips and TTC.
+Let’s delve into some statistics about bicycles in Toronto. There is estimated to be about 2.7% of Torontonians who bike to work and around 15-30% in downtown neighbourhoods. More recently, Toronto has seen almost 1 million bicyclists in Bloor in 2020. 
+However, with increasing number of cyclists there have been increasing number of bicycles thefts as provided by the City of Toronto Police database. This data is to help Torontonians avoid having their bicycle stolen by analyzing what properties of bike make it more ‘steal-able’ and a tip to note on theft prevention.
+
+**Disclaimer**: The data is reported thefts of bicycles, there may be trends undiscovered due to thefts that have gone unreported.
+
+
+\pagebreak
+
+### TIME DATA 
+
+
+Let’s first take a look at how many bicycles are being stolen each year. The data shows that number of bicycles being stolen each year is increasing with the latest year being 3674. What’s interesting is that the monthly trend over the years shows a cyclical pattern. Notably, there are more bicycle thefts during warmer weathers and less in colder weathers. This is definitely true as there are more riders in during summertime. Some statistics here is that the month with the least number of stolen bikes is 58 and most stolen bike during 642. 
+So, with the number of bikes being stolen, how much is it costing Torontonians and how can we reduce this number?
+
+
+\
+\
+\
+
+# Graph
+
+
+```{r numTheftsoverTime, echo=FALSE, warning=FALSE}
+# Variables of interest
+d_theft <- select(d, Occurrence_Year, Occurrence_Month, ObjectId)
+
+# Remove the NA values
+d_theft <- na.omit(d_theft)
+
+# Create a new variable that is Date
+d_theft$Date <- paste(d_theft$Occurrence_Year, d_theft$Occurrence_Month, sep = "/")
+
+# Find the total cost in thousands by Date
+d_theft_total <- d_theft %>%
+	  group_by(Date) %>%
+	  summarise(Number_Stolen = n_distinct(ObjectId))
+
+# Predefine x axis values
+x_date = c("2014/1", "2015/1", "2016/1", "2017/1", "2018/1", "2019/1")
+
+
+# Plot
+ggplot(data = d_theft_total) + theme_economist() + 
+  geom_col(aes(x = Date, y = Number_Stolen))+
+  scale_x_discrete(breaks = x_date)+
+  labs(titles = "Total number of Stolen Bikes over Time",
+       x = "Time", 
+       y = "Total Bikes Stolen")
+
+```
+\pagebreak
+
+### COST 
+
+Looking at the graph here, we see that bike thefts is actually costing approximately 3 million dollars per year. We can see almost a million dollars increase from 2014 to 2018. More preventative measures from the city must be implemented to avoid this cost. In addition, we must consider that bike theft with unknown cost was not accounted into this data. Hence, actual cost of bike theft will be higher than what’s depicted in this graph. 
+We’ve looked at some trends in bike theft crimes and noticed that over the years, there’s been increasing number of bike theft. The question now is how can we as owner of bicycle prevent thefts to the best of our ability? Let’s delve into some properties of bicycle that make it more prone to theft. Do expensive bicycles get stolen more often?
+
+\
+\
+\
+
+# Graph
+
+
+```{r TimevsCost, echo=FALSE}
+
+# Variables of interest
+d_cost <- select(d, Occurrence_Year, Occurrence_Month, Cost_of_Bike, ObjectId)
+
+# Remove NA values
+d_cost <- na.omit(d_cost)
+
+# Find the total cost in thousands by Date
+d_cost_date <- d_cost %>%
+	  group_by(Occurrence_Year) %>%
+	  summarise(Total_Cost_in_Thousands = as.integer(sum(Cost_of_Bike))/1000)
+
+
+# Plot
+ggplot(data = d_cost_date) + theme_economist() + 
+  geom_col(aes(x = Occurrence_Year, y = Total_Cost_in_Thousands))+
+  labs(titles = "Total Cost of Stolen Bikes over Time",
+       x = "Time (in Months)", 
+       y = "Total Cost i(n Thousands)")
+
+
+
+
+```
+\pagebreak
+
+### BIKE PROPERTIES – COST 
+
+
+We may think to ourselves that expensive bicycles are more likely to be stolen. People want more expensive items, it’s natural. Taking a look at the trimmed histogram, it looks like the bicycles that are being stolen the most are in the price range of 500 to 700. The histogram is skewed to the right, and this means that it’s untrue to assume that more expensive is more prone to theft. 
+Some interesting statistics about cost from this dataset is that the average cost of bicycle stolen is 967.69 and average cost of bicycle recovered is 1058.36. Do keep in mind that the histogram is truncated and does not reflect true mean. This means that if you have your bicycle stolen in Toronto, report it as a slightly more expensive item than it really is. The police may take the crime more seriously if the value of the item stolen is. Now that we’ve discussed cost of bicycle, what about the type of bike?
+
+\
+\
+\
+
+# Graph
+
+
+```{r, echo=FALSE, warning=FALSE, results='hide'}
+# Set a limit on cost of bike due to many outliers that skew the graph
+d_tc <- select(d, Bike_Type, Cost_of_Bike, ObjectId, Status)
+
+# Remove NA values
+d_tc <- na.omit(d_tc)
+d_tc_new <- d_tc[d_tc$Cost_of_Bike < 3200, ]
+
+# Plot histogram of number stolen vs cost
+ggplot(d_tc_new, aes(x=Cost_of_Bike)) +  theme_economist() + 
+  geom_histogram(color="black", fill="white", binwidth=200) +
+  scale_x_continuous(breaks = seq(0,3000,500)) +
+  labs(titles = "Number of stolen bikes per cost range",
+       x = "Cost of Bike", 
+       y = "Number of Bikes stolen")
+
+print(paste0("Average cost of Recovered Bicycles: ", mean(na.omit(d_tc[d_tc[,"Status"] == "RECOVERED",]$Cost_of_Bike))))
+print(paste0("Average cost of Stolen Bicycles: ", mean(na.omit(d_tc[d_tc[,"Status"] == "STOLEN",]$Cost_of_Bike))))
+
+print(paste0("Total number of Mountain Bikes: ", sum(d_tc_new$Bike_Type == "MT")))
+print(paste0("Total number of Regular Bikes: ", sum(d_tc_new$Bike_Type == "RG")))
+
+```
+\pagebreak
+
+### BIKE PROPERTY – TYPE 
+
+
+This graph addresses what type of bicycle is being stolen (from unicycles to even recumbent bicycles) and how many of them. There is a clear pattern that we can identify in this graph. First, the most stolen bicycle types are mountain and regular bikes. This is likely due to the fact that there are so many more regular or mountain bicycles than any other types of bicycles. 
+We see that from this graph, thieves are more likely to steal the bicycles if they are mountain or regular. But since there are a lot of manufacturers, is there a particular manufacture that thieves prefer?
+
+
+\
+\
+\
+
+# Graph
+
+
+
+```{r typeCost, echo=FALSE, warning=FALSE}
+# Variables of Interest
+d_tc <- select(d, Bike_Type, Cost_of_Bike, ObjectId, Status)
+
+# Remove NA values
+d_tc <- na.omit(d_tc)
+
+# Two plots:
+#   Type vs Avg Cost and Type vs Num Stolen
+
+# Find the average cost per bike type
+d_tc_avg <- d_tc %>% 
+  group_by(Bike_Type) %>%
+  summarise(Average_Cost = sum(Cost_of_Bike)/n_distinct(ObjectId))
+
+# Count the number of bikes stolen from each bike type  
+d_tc_num <- d_tc %>% 
+  group_by(Bike_Type) %>%
+  summarise(Num_Stolen = n_distinct(ObjectId))
+
+# Natural join on Bike_Type for convenience
+d_total <- merge(d_tc_avg, d_tc_num, by = "Bike_Type")
+
+# Keep the same x-axis as previous graph for easy comparison
+ggplot(data = d_total) + theme_economist() + 
+  geom_col(aes(x = reorder(Bike_Type, -Average_Cost), y = Num_Stolen))+
+  labs(titles = "Total stolen for each Bike Type",
+       x = "Bike Type", 
+       y = "Number of Bikes stolen")
+```
+\pagebreak
+
+### BIKE PROPERTY – MAKE 
+
+
+Using pie chart, this visualization seeks the answer of what particular bicycle make is more likely to be stolen. We can see that among the top 10 bicycles makers, Giant and Trek are the most popular bicycles to be stolen at 26%, 21% respectively. One thing to note here is that since the dataset contained over 1000 unique bicycles makers, we decided to create the pie chart using the top 10 makes. This is an appropriate estimate to see what the number 1 stolen make is. Now that we’ve seen the type, make, and the cost of the bicycle we should address another important feature of a bicycle, its color.
+
+
+\
+\
+\
+
+# Graph
+
+
+```{r pieChart, echo=FALSE, warning=FALSE, message=FALSE}
+# 10 most popular makers
+
+# Variables of interest
+d_make <- select(d, Bike_Make, ObjectId)
+
+# remove trailing whitespaces
+d_make$Bike_Make <- str_trim(d_make$Bike_Make)
+
+# remove NA values
+d_make <- na.omit(d_make)
+
+# Figure out what the most popular brands are:
+
+d_make_total <- d_make %>%
+	  group_by(Bike_Make) %>%
+	  summarise(Number_of_bikes = n_distinct(ObjectId))
+
+# To find top n, search for top n+2 because OTHER and OT will be part of the top n+2 (which willbe removed later)
+d_make_top <- d_make_total %>% 
+  top_n(n=9, wt = Number_of_bikes)
+
+# Remove the OTHER and OT makers
+d_make_top = d_make_top[d_make_top$Bike_Make != "OTHER" & d_make_top$Bike_Make != "OT",]
+
+# Save Bike_Make in labels for convenience
+labels <- d_make_top$Bike_Make
+
+# Calculate the percentage within the top n
+d_make_top$percentage <- (d_make_top$Number_of_bikes/sum(d_make_top$Number_of_bikes))
+
+
+# Plot
+ggplot(data = d_make_top, aes(x="", y = percentage, fill = Bike_Make)) +
+       geom_col(color = "black") +
+       coord_polar("y", start = 0) + 
+       geom_text(aes(label = paste0(round(percentage*100), "%")), 
+                          position = position_stack(vjust = 0.5)) +
+       theme(panel.background = element_blank(),
+             axis.line = element_blank(),
+             axis.text = element_blank(),
+             axis.ticks = element_blank(),
+             axis.title = element_blank(), 
+             plot.title = element_text(hjust = 0.5, size = 18)) +
+       ggtitle("Top 10 Maker of Stolen Bicycles")
+
+```
+
+\pagebreak
+
+### BIKE    PROPERTY – COLOR 
+
+
+This visualization is a very simple, straight-forward yet powerful tool. It reveals the essential/popular color of the bicycles being stolen in Toronto very fast. Notice how “BLK” is in the center of the word cloud amongst other colors. We see that black is by far the most popular color of stolen bicycles. Following black is blue, gray, red, white which seem to be approximately equal in essence of popularity of stolen bikes.  \\
+
+
+\
+\
+\
+
+# Graph
+
+
+```{r wordCloud, echo=FALSE, warning=FALSE}
+
+d_cloud <- select(d, Bike_Colour, Status, ObjectId)
+
+d_cloud <- na.omit(d_cloud)
+
+
+d_cloud_count <- d_cloud %>%
+	  group_by(Bike_Colour) %>%
+	  summarise(Count = n_distinct(ObjectId))
+
+wordcloud(words = d_cloud_count$Bike_Colour, freq = d_cloud_count$Count, min.freq = 1, max.words = 200, random.order = FALSE, rot.per=0.35, colors = brewer.pal(8, "Dark2"))
+```
+
+### Results & Actionable insights 
+
+We’ve touched on a lot of properties of bicycles that make it more ‘steal-able’ to thieves. Summarizing our findings from rigorous data analysis skills, we showcased that cheap, black, mountain/regular bicycles from Giant are the most likely to be stolen in Toronto. Using this knowledge, if you are a Torontonian and a frequent bicyclist, I’d recommend that you buy somewhat expensive, yellow, BMW bike. If you want to take a further step in preventing theft, then you should buy expensive yellow unicycle. But the main takeaway from this article is to avoid purchasing black mountain or regular bicycles as you may be the primary target from thieves. 
