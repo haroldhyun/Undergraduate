@@ -1,0 +1,82 @@
+---
+title: "STA355 Midterm"
+author: "Harold Hyun Woo Lee"
+date: "3/3/2021"
+output: pdf_document
+---
+___Q1)a)ii)___
+```{r}
+tau <- seq(from=0, to=1, by=0.001)
+
+tau <- tau[2:1000]
+
+r <- (tau*(1-tau))/(((qexp(tau))^2)*((dexp(qexp(tau)))^2))
+
+plot(tau[780:810],r[780:810], main="Tau against Variance", ylab="Variance", xlab="Tau")
+
+min(r)
+
+tau[match(min(r), r)]
+```
+The value of $\tau$ that minimizes $\sigma^2(\tau)$ is $\tau = 0.797$ 
+
+___Q1)b)___
+```{r}
+dat <- scan("prob1.txt")
+n <- 50
+
+Y <- c(n*dat[1])
+
+for (i in 1:49){
+  Y <- c(Y, (n-i)*(dat[i+1] - dat[i]))
+}
+
+lambda <- 50/sum(Y)
+lambda
+
+
+SE <- (50/(lambda^2))^(-1/2)
+SE
+```
+Computing the MLE estimate of $\lambda$ based on the data, we get $\lambda_{MLE} = 0.405$
+
+Computing the estimate of the standard error of the estimate in (i), we get $\hat{SE}(\hat{\lambda})$ = 0.0573
+
+___Q2)b)___
+```{r}
+dat2 <- scan("prob2.txt")
+
+
+theta_hat <- 1-1/(mean(dat2))*exp(mean(log(dat2)))
+theta_hat
+
+
+# Compute pseudo-values
+pseud <- NULL
+
+for (i in 1:200){
+  xi <- dat2[-i]
+  A_F <- 1-1/(mean(xi))*exp(mean(log(xi)))
+  pseud <- c(pseud, 200*theta_hat - 199*A_F)
+}
+
+SE_hat <- sqrt(var(pseud)/200)
+SE_hat
+```
+
+
+Computing the estimate of Atkinson Index based on the data, we get $\hat{A}(F) = 0.843$
+
+Computing the estimate of the standard error of the estimate of Atkinson Index, we get $\hat{SE}(\hat{A}(F))$ = 0.0305
+
+
+
+
+
+
+
+
+
+
+
+
