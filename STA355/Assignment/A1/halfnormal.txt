@@ -1,0 +1,18 @@
+halfnormal <- function(x,tau=0.5,ylim) {
+       sigma <- quantile(abs(x),probs=tau)/sqrt(qchisq(tau,1))
+       n <- length(x)
+       pp <- ppoints(n)
+       qq <- sqrt(qchisq(pp,df=1))
+# upper envelope
+       upper <- sigma*(qq + 3*sqrt(pp*(1-pp))/(2*sqrt(n)*dnorm(qq)))
+# lower envelope 
+       lower <- sigma*(qq - 3*sqrt(pp*(1-pp))/(2*sqrt(n)*dnorm(qq)))
+# add upper and lower envelopes to plot
+       if (missing(ylim)) ylim <- c(0,max(c(upper,abs(x))))
+       plot(qq,sort(abs(x)),
+          xlab="Half Normal quantiles",ylab="ordered data",pch=20,
+          ylim=ylim)
+       lines(qq,lower,lty=3,lwd=3,col="red")
+       lines(qq,upper,lty=3,lwd=3,col="red")
+       abline(a=0,b=sigma,lwd=3)
+       }
