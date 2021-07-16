@@ -1,0 +1,70 @@
+---
+title: "313 A1"
+author: "Harold Hyun Woo Lee"
+date: "2/4/2021"
+output:
+  word_document: default
+  html_document:
+    df_print: paged
+---
+
+```{r fig1, fig.height = 7, fig.width = 13}
+library(ggplot2)
+library(dplyr)
+library(ggeasy)
+
+data <- read.csv("toronto-movies2.csv")
+#data <- data[seq(1, nrow(data), 2), ]
+
+x = data$metascore
+y = data$rotten
+
+
+avg_x = mean(x)
+avg_y = mean(y)
+
+a = ifelse(x<y, 'Rotten Tomato', 'Meta Critic')
+
+data$Greater_rating = a
+
+
+col = c("Red", "Blue")
+
+ggplot(data) + 
+  geom_point(size = 4, stroke = 1, shape = 20, aes(x, y, colour=Greater_rating)) +
+  #geom_point(x=91, y=98 , size = 5, colour = "black")+
+  #geom_text(label="★", size=10, family = "HiraKakuPro-W3", x=91, y=98, col="red") +
+  geom_point(shape="\u2727", size = 10, x = 48, y = 95, col="blue") +
+  geom_point(shape="\u272F", size = 10, x = 91, y = 98, col="blue") +
+  geom_point(shape="\u2620", size = 6, x = 12, y = 4, col="red") +
+  geom_point(shape="\u2727", size = 10, x = 54, y = 25, col="red") +
+  xlim(0, 102)+
+  ylim(0, 100) +
+  scale_color_manual(values=c("#FF2D00", "#0000FF")) +
+  labs(x = "Critic Meta Score", y = "Rotten Tomato Score", 
+       caption = "Source: IMDB") +
+  ggtitle("Do critics have similar rating on the best/worst movies filmed in Toronto?") +
+  theme(plot.title = element_text(hjust = 0.5))+
+  #geom_line(aes(y = x), linetype="dashed", col="gray70") +
+  geom_line(aes(x = 0, y = avg_y), linetype="dashed", col="gray70") +
+  geom_hline(yintercept = 49.72, linetype="dashed", col="gray70") + 
+  geom_vline(xintercept = 49.65, linetype="dashed", col="gray70") + 
+  #theme_grey() + 
+  annotate(geom="text", x=0, y=51, label="Avg: 49.72",
+              color="black", size = 3) +
+  annotate(geom="text", x=50, y=0, label="Avg: 49.65",
+              color="black", size = 3) +
+  annotate(geom="text", x=100, y=100, label="Best Movies",
+              color="black", size = 6) +
+  annotate(geom="text", x=3, y=13, label="Worst Movies",
+              color="black", size = 6) +
+  annotate(geom="text", x=96, y=93, label="The Sweet Hereafter",
+              color="black", size = 3) + 
+  annotate(geom="text", x=38, y=95, label="In the Shadow of the Moon",
+              color="black", size = 3)+
+  annotate(geom="text", x=3, y=2, label="The Adventure of Pluto Nash",
+              color="black", size = 3) + 
+  annotate(geom="text", x=59, y=25, label="Booty Call",
+              color="black", size = 3)
+  #geom_label(aes(x, y), label=data$title)
+```
